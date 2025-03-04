@@ -1,49 +1,67 @@
 async function getDashboardData(query) {
   const baseUrl = 'https://boolean-spec-frontend.vercel.app/freetestapi';
 
-  const destPromise = fetch(`${baseUrl}/destinations?search=${query}`).then(
-    (res) => res.json()
-  );
-  const weatherPromise = fetch('https://www.meteofittizio.it').then((res) =>
-    res.json()
-  );
-  const airportPromise = fetch(`${baseUrl}/airports?search=${query}`).then(
-    (res) => res.json()
-  );
+  const destinationsUrl = `${baseUrl}/destinations?search=${query}`;
+  const weatherUrl = `${baseUrl}/weathers?search=${query}`;
+  const airportsUrl = `${baseUrl}/airports?search=${query}`;
 
-  const [destRes, weatherRes, airportRes] = await Promise.allSettled([
-    destPromise,
-    weatherPromise,
-    airportPromise,
-  ]);
+  try {
+    const results = await Promise.allSettled([
+      fetch(destinationsUrl).then((res) => res.json()),
+      fetch(weatherUrl).then((res) => res.json()),
+      fetch(airportsUrl).then((res) => res.json()),
+    ]);
 
-  const getDataOrNull = (res, label) => {
-    if (res.status === 'fulfilled') {
-      return res.value[0] || {};
-    } else {
-      console.error(`Errore nella richiesta ${label}:`, res.reason);
-      return null;
+    const destinationData =
+      results[0].status === 'fulfilled' && results[0].value.length > 0
+        ? results[0].value[0]
+        : null;
+    const weatherData =
+      results[1].status === 'fulfilled' && results[1].value.length > 0
+        ? results[1].value[0]
+        : null;
+    const airportData =
+      results[2].status === 'fulfilled' && results[2].value.length > 0
+        ? results[2].value[0]
+        : null;
+
+    const dashboardData = {
+      city: destinationData ? destinationData.name : null,
+      country: destinationData ? destinationData.country : null,
+      temperature: weatherData ? weatherData.temperature : null,
+      weather: weatherData ? weatherData.weather_description : null,
+      airport: airportData ? airportData.name : null,
+    };
+
+    console.log('Dati della dashboard:', dashboardData);
+
+    let message = '';
+    if (dashboardData.city && dashboardData.country) {
+      message += `${dashboardData.city} si trova in ${dashboardData.country}.\n`;
     }
-  };
+    if (dashboardData.temperature !== null && dashboardData.weather) {
+      message += `Oggi ci sono ${dashboardData.temperature} gradi e il tempo è ${dashboardData.weather}.\n`;
+    }
+    if (dashboardData.airport) {
+      message += `L'aeroporto principale è ${dashboardData.airport}.\n`;
+    }
+    console.log(message);
 
-  const cityData = getDataOrNull(destRes, 'destinazione');
-  const weatherData = getDataOrNull(weatherRes, 'meteo');
-  const airportData = getDataOrNull(airportRes, 'aeroporto');
-
-  const result = {
-    city: cityData?.name || 'Sconosciuto',
-    country: cityData?.country || 'Sconosciuto',
-    temperature: weatherData?.temperature || 'N/D',
-    weather: weatherData?.weather_description || 'N/D',
-    airport: airportData?.name || 'Sconosciuto',
-  };
-
-  console.log(`${result.city} si trova in ${result.country}.`);
-  console.log(
-    `Oggi ci sono ${result.temperature} gradi e il meteo è ${result.weather}.`
-  );
-  console.log(`L'aeroporto principale è ${result.airport}.`);
+    return dashboardData;
+  } catch (error) {
+    console.error('Errore nel recupero dei dati:', error);
+    return null;
+  }
 }
 
-// Test con una città
-getDashboardData('london');
+getDashboardData('london').catch(console.error);
+
+getDashboardData('vienna').catch(console.error);
+
+const oldFetch = fetch;
+fetch = (url) =>
+  url.includes('weathers')
+    ? Promise.reject("Errore nell'API meteo")
+    : oldFetch(url);
+getDashboardData('paris').catch(console.error);
+fetch = oldFetch;
